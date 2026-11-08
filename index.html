@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Shift Planner for pick and inbound</title>
+<meta name="description" content="Plan weekly shifts for an online grocery picking store from order volumes, picking speed, inbound work and staff contracts. Runs in your browser." />
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#F5F6FA;--card:#fff;--line:#DDE1EA;--text:#1B2230;--muted:#5E6A80;--acc:#1F6FEB;--ft:#DDF3E4;--pt:#DCEBFF;--warn:#FFF4D6;--bad:#FDE2E0;--ok:#E3F6E9}
+body{font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1100px;margin:0 auto;padding:0 18px}button,input,select{font:inherit;color:inherit}:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+header{padding:26px 0 8px}h1{font-size:26px;letter-spacing:-.01em}.lede{color:var(--muted);max-width:760px;margin-top:4px}
+.privacy{display:inline-block;margin-top:10px;font-size:13px;background:var(--ok);border-radius:99px;padding:4px 12px}
+section.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin:14px 0}h2{font-size:17px;margin-bottom:4px}.sub{color:var(--muted);font-size:14px;margin-bottom:12px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px}label{display:block;font-size:12.5px;font-weight:600;color:var(--muted);margin-bottom:3px}
+input[type=number],input[type=text],input[type=time],select{width:100%;padding:8px 9px;border-radius:8px;border:1px solid var(--line);background:#fff;font-size:14px}
+table{border-collapse:collapse;width:100%;font-size:13.5px}th{font-size:12px;color:var(--muted);text-align:left;padding:6px;border-bottom:1px solid var(--line);white-space:nowrap}td{padding:4px 5px;border-bottom:1px solid var(--line)}
+.scroll{overflow-x:auto}td input[type=number]{width:72px}td input[type=text]{min-width:110px}td input[type=checkbox]{width:17px;height:17px}.c{text-align:center}
+.btn{padding:10px 18px;border-radius:10px;border:1px solid var(--line);background:#fff;font-weight:600;cursor:pointer;font-size:14px}.btn.main{background:var(--acc);border-color:var(--acc);color:#fff;font-size:16px;padding:12px 26px}.btn:disabled{opacity:.6;cursor:wait}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:12px}.status{font-size:14px;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.chip{background:#EEF1F8;border-radius:10px;padding:6px 11px;font-size:13px}.chip b{font-size:14px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:14px}.kpi{border:1px solid var(--line);border-radius:12px;padding:12px 14px}.kpi span{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}.kpi b{display:block;font-size:24px}
+.kpi.good{background:var(--ok)}.kpi.warn{background:var(--warn)}.kpi.bad{background:var(--bad)}
+.shift{border-radius:8px;padding:5px 8px;font-size:13px;white-space:nowrap}.shift.FT{background:var(--ft)}.shift.PT{background:var(--pt)}.off{color:#A7AFBF}
+.low{background:var(--bad);border-radius:6px;padding:2px 6px}.charts{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px}.charts svg{width:100%;height:auto}.charts h3{font-size:14px;margin-bottom:2px}
+.notice{border-radius:10px;padding:10px 13px;font-size:14px;margin-top:10px}.notice.warn{background:var(--warn)}.notice.bad{background:var(--bad)}
+ul.list{padding-left:20px;font-size:14px}ul.list li{margin:5px 0}details{margin-top:8px}summary{cursor:pointer;font-weight:600;font-size:14px}.note{font-size:12.5px;color:var(--muted);margin-top:8px}
+footer{padding:20px 0 40px;color:var(--muted);font-size:13px;text-align:center}
+@media print{body{background:#fff}header,#inputs,.row,footer,.noprint{display:none}section.card{border:0;padding:0}}
+</style>
+</head>
+<body>
+<header class="wrap"><h1>Shift Planner for pick and inbound</h1>
+  <p class="lede">Enter the expected orders, picking speed, inbound work and your staff. The planner builds a weekly shift plan that finishes the work on time with the fewest paid hours, and tells you how likely the plan is to hold on a normal week.</p>
+  <span class="privacy">Everything runs in your browser. Staff data never leaves this computer.</span></header>
+
+<main class="wrap">
+<div id="inputs">
+<section class="card"><h2>1. Expected work</h2><p class="sub">Orders to pick and inbound labour hours for each working day. Leave a day at 0 if there is no picking or inbound.</p>
+  <div class="scroll"><table id="week"></table></div>
+  <div class="grid" id="demand" style="margin-top:14px"></div>
+  <div class="chips" id="preview" aria-live="polite"></div></section>
+
+<section class="card"><h2>2. Hours and rules</h2><p class="sub">Shifts are planned inside these windows in 30-minute steps.</p><div class="grid" id="rules"></div></section>
+
+<section class="card"><h2>3. Staff</h2><p class="sub">Contract hours are the weekly minimum the planner tries to give each person (soft) and the maximum it never exceeds. Untick days someone cannot work.</p>
+  <div class="scroll"><table id="staff"></table></div>
+  <div class="row"><button class="btn" id="addStaff" type="button">+ Add person</button><button class="btn" id="reset" type="button">Reset to example data</button><span class="status" id="staffSummary"></span></div></section>
+
+<div class="row"><button class="btn main" id="go" type="button">Create shift plan</button><span class="status" id="status" role="status"></span></div>
+</div>
+
+<div id="results" hidden>
+  <section class="card"><h2>Plan summary</h2><div class="kpis" id="kpis"></div><div id="alerts"></div></section>
+  <section class="card"><h2>Weekly roster</h2><p class="sub">Green is full-time, blue is part-time. Red hours are below the person’s contract minimum.</p><div class="scroll"><table id="roster"></table></div>
+    <div class="row noprint"><button class="btn" id="csv" type="button">Download CSV</button><button class="btn" id="print" type="button">Print</button></div></section>
+  <section class="card"><h2>Coverage against the work</h2><p class="sub">Bars show people on shift in each half hour. The dashed line is the average number needed, and the dotted line is your minimum on the floor.</p><div class="charts" id="charts"></div></section>
+  <section class="card"><h2>Will the plan hold?</h2><p class="sub">An independent test with 2,000 simulated days of random order counts, order sizes (1 to 170 items) and picking speeds.</p><div class="scroll"><table id="risk"></table></div></section>
+</div>
+
+<section class="card noprint"><h2>How it works and what it assumes</h2>
+  <details open><summary>Method</summary><ul class="list">
+    <li>Workload per picking day = orders × items per order × seconds per item, divided by the productive share of paid time. The plan covers the workload that is not exceeded on your chosen share of days, estimated by simulation, so a normal busy day does not overrun.</li>
+    <li>The planner then solves a mixed-integer program (HiGHS solver, running in your browser). It picks each person’s shift for each day so that, at every half hour, enough capacity remains to finish all work released from that point on, the minimum floor staffing is met, and contract limits and availability are respected. It minimises paid hours, then gives a small push towards fair Saturday rotation.</li></ul></details>
+  <details><summary>Assumptions to confirm</summary><ul class="list">
+    <li><b>Inbound workload and window are placeholders</b> (6 labour hours on Tue, Thu and Sat, same window as picking). Replace them with your real figures and the real inbound time.</li>
+    <li><b>Contract rules in the staff table are examples</b> (full-time 20 to 27.5 hours over up to 5 days, part-time 4 hours up to 3 days). Edit them to match real contracts.</li>
+    <li>Part-time staff work one 4-hour shift on each day they are rostered. Full-time shifts run 4 to 5.5 hours inside the window. Daytime work outside the window is not planned here.</li>
+    <li>The tool does not check labour-law or works-council rules. Shifts here end by 22:00 and are at most 5.5 hours, but if you extend them, check the break and rest-time rules that apply to you.</li></ul></details>
+</section>
+</main>
+<footer>Planning aid, not a guarantee. Review every plan before publishing it to staff.</footer>
+
+<script src="planner.js"></script>
+<script>
+const P = Planner, DAYS = P.DAYS, KEY = "shiftplanner.v1", $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+let C = P.defaults();
+try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.staff) C = Object.assign(P.defaults(), s); } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(C)); } catch (e) {} };
+let last = null;
+
+const FIELDS = {
+  demand: [["itemsPerOrder", "Average items per order", 1, 170], ["secMin", "Seconds per item, fastest", 1, 120], ["secMax", "Seconds per item, slowest", 1, 120], ["overheadSec", "Extra seconds per order (staging, labels)", 0, 600],
+    ["utilization", "Productive share of paid time (%)", 30, 100], ["service", "Finish on time on this share of days (%)", 50, 99.9], ["orderSd", "Day-to-day variation in orders (%)", 0, 50]],
+  rules: [["pickStart", "Picking starts", "time"], ["pickEnd", "Picking window ends", "time"], ["inStart", "Inbound starts", "time"], ["inEnd", "Inbound window ends", "time"],
+    ["minStaff", "Minimum people on the floor", 0, 30], ["minQualified", "Minimum inbound-qualified people during inbound", 0, 10], ["ptShift", "Part-time shift length (hours)", 1, 8], ["ftMin", "Full-time shift, shortest (hours)", 1, 8],
+    ["ftMax", "Full-time shift, longest (hours)", 1, 8], ["timeLimit", "Solver time limit (seconds)", 5, 120]]
+};
+function field(group, f) { const t = f[2] === "time" ? "time" : "number", ex = t === "number" ? ` min="${f[2]}" max="${f[3]}" step="any"` : "";
+  return `<div><label for="f_${f[0]}">${f[1]}</label><input id="f_${f[0]}" type="${t}" data-k="${f[0]}" value="${esc(C[f[0]])}"${ex}></div>`; }
+function renderStatic() {
+  $("week").innerHTML = "<tr><th></th>" + DAYS.map(d => `<th>${d}</th>`).join("") + "</tr><tr><th>Orders to pick</th>" + DAYS.map(d => `<td><input type="number" min="0" data-w="orders" data-d="${d}" value="${C.orders[d]}"></td>`).join("") +
+    "</tr><tr><th>Inbound labour hours</th>" + DAYS.map(d => `<td><input type="number" min="0" step="any" data-w="inbound" data-d="${d}" value="${C.inbound[d]}"></td>`).join("") + "</tr>";
+  $("demand").innerHTML = FIELDS.demand.map(f => field("demand", f)).join("") + `<div><label for="f_release">When is the work available?</label><select id="f_release" data-k="release">
+    <option value="start">All orders ready at the start</option><option value="half">Half at the start, half spread evenly</option><option value="even">Spread evenly through the window</option></select></div>`;
+  $("f_release").value = C.release; $("rules").innerHTML = FIELDS.rules.map(f => field("rules", f)).join("");
+}
+function renderStaff() {
+  $("staff").innerHTML = "<tr><th>Name</th><th>Type</th><th>Min h/wk</th><th>Max h/wk</th><th>Max days</th>" + DAYS.map(d => `<th class="c">${d}</th>`).join("") + "<th class=\"c\">Inbound qualified</th><th>Saturdays, last 4 wks</th><th></th></tr>" +
+    C.staff.map((s, i) => `<tr><td><input type="text" data-i="${i}" data-s="name" value="${esc(s.name)}" aria-label="Name"></td>
+    <td><select data-i="${i}" data-s="type"><option${s.type === "FT" ? " selected" : ""}>FT</option><option${s.type === "PT" ? " selected" : ""}>PT</option></select></td>
+    <td><input type="number" min="0" step="any" data-i="${i}" data-s="minHours" value="${s.minHours}"></td><td><input type="number" min="0" step="any" data-i="${i}" data-s="maxHours" value="${s.maxHours}"></td>
+    <td><input type="number" min="0" max="7" data-i="${i}" data-s="maxDays" value="${s.maxDays}"></td>` +
+    DAYS.map(d => `<td class="c"><input type="checkbox" data-i="${i}" data-a="${d}" ${s.avail[d] ? "checked" : ""} aria-label="${esc(s.name)} available ${d}"></td>`).join("") +
+    `<td class="c"><input type="checkbox" data-i="${i}" data-s="qualified" ${s.qualified ? "checked" : ""}></td><td><input type="number" min="0" max="4" data-i="${i}" data-s="recentSat" value="${s.recentSat || 0}"></td>
+    <td><button class="btn" type="button" data-del="${i}" aria-label="Remove ${esc(s.name)}">✕</button></td></tr>`).join("");
+  const pt = C.staff.filter(s => s.type === "PT").length; $("staffSummary").textContent = `${C.staff.length} people, ${pt} part-time (${C.staff.length ? Math.round(pt / C.staff.length * 100) : 0}%)`;
+}
+let timer; function preview() {
+  clearTimeout(timer); timer = setTimeout(() => { const parts = DAYS.map(d => { const o = +C.orders[d] || 0, ih = +C.inbound[d] || 0; if (o <= 0 && ih <= 0) return "";
+    const mean = P.meanHours(C, d), plan = P.pickHours(C, d); return `<span class="chip"><b>${d}</b> ${o > 0 ? `picking ${mean.toFixed(1)} h on average, plan for ${plan.toFixed(1)} h` : ""}${o > 0 && ih > 0 ? ", " : ""}${ih > 0 ? `inbound ${ih} h` : ""}</span>`; }).join("");
+    $("preview").innerHTML = parts || '<span class="chip">No work entered</span>'; }, 250);
+}
+
+document.addEventListener("input", e => { const t = e.target, v = t.type === "checkbox" ? t.checked : t.value;
+  if (t.dataset.k) C[t.dataset.k] = t.type === "number" ? +v : v; else if (t.dataset.w) C[t.dataset.w][t.dataset.d] = +v || 0;
+  else if (t.dataset.a) C.staff[t.dataset.i].avail[t.dataset.a] = v; else if (t.dataset.s) C.staff[t.dataset.i][t.dataset.s] = t.type === "number" ? +v : v;
+  if (t.dataset.s === "type") renderStaff(); save(); preview(); });
+document.addEventListener("click", e => { const d = e.target.closest("[data-del]"); if (d) { C.staff.splice(+d.dataset.del, 1); save(); renderStaff(); } });
+$("addStaff").onclick = () => { C.staff.push({ name: "New person", type: "PT", minHours: 4, maxHours: 12, maxDays: 3, qualified: true, recentSat: 0, avail: Object.fromEntries(DAYS.map(d => [d, true])) }); save(); renderStaff(); };
+$("reset").onclick = () => { if (confirm("Replace everything with the example data?")) { C = P.defaults(); save(); renderStatic(); renderStaff(); preview(); } };
+
+function problems() { const p = [], mins = C.slotMin;
+  if (!C.staff.length) p.push("Add at least one person.");
+  if (P.hm(C.pickEnd) <= P.hm(C.pickStart) || P.hm(C.inEnd) <= P.hm(C.inStart)) p.push("A window must end after it starts.");
+  if (C.secMin > C.secMax) p.push("Fastest seconds per item must not be larger than slowest.");
+  if (C.ftMin > C.ftMax) p.push("Shortest full-time shift must not be longer than the longest.");
+  if (!DAYS.some(d => (+C.orders[d] || 0) > 0 || (+C.inbound[d] || 0) > 0)) p.push("Enter some orders or inbound hours.");
+  return p; }
+
+const worker = (() => { try { return new Worker("solver-worker.js"); } catch (e) { return null; } })();
+$("go").onclick = () => {
+  const pr = problems(); if (pr.length) { $("status").textContent = pr.join(" "); return; }
+  if (!worker) { $("status").textContent = "This browser could not start the solver. Open the page from a web address (not as a local file) in a current browser."; return; }
+  const b = P.build(C); $("go").disabled = true; $("status").textContent = `Solving (${b.nVars} shift options, up to ${C.timeLimit} seconds)…`; const t0 = Date.now();
+  worker.onmessage = ev => { $("go").disabled = false;
+    if (!ev.data.ok) { $("status").textContent = "The solver failed: " + ev.data.error; return; }
+    const res = P.read(C, b, ev.data.primal); last = { res, risk: P.simulate(C, res, 2000, 23), cfg: JSON.parse(JSON.stringify(C)) };
+    $("status").textContent = `Done in ${((Date.now() - t0) / 1000).toFixed(1)} seconds.`; show(); };
+  worker.onerror = ev => { $("go").disabled = false; $("status").textContent = "The solver could not load: " + (ev.message || "check that the highs folder is next to this page."); };
+  worker.postMessage({ lp: b.lp, options: { time_limit: C.timeLimit, mip_rel_gap: 0.02, output_flag: false } });
+};
+
+const shiftText = (res, c, di, sh) => { const m = res.days[di]; return P.clock(m.start + sh.a * c.slotMin) + "–" + P.clock(m.start + (sh.a + sh.L) * c.slotMin); };
+function show() {
+  const { res, risk, cfg: c } = last, minP = Object.values(risk).length ? Math.min(...Object.values(risk).map(r => r.p)) : null, under = res.stats.filter((s, i) => s.hours + 1e-9 < c.staff[i].minHours);
+  const cls = (v, g, w) => v >= g ? "good" : v >= w ? "warn" : "bad";
+  $("kpis").innerHTML = `<div class="kpi"><span>Paid hours per week</span><b>${res.paid}</b></div>
+    <div class="kpi ${res.short < 0.05 ? "good" : "bad"}"><span>Work left undone</span><b>${res.short.toFixed(1)} h</b></div>` +
+    (minP === null ? "" : `<div class="kpi ${cls(minP, 0.95, 0.85)}"><span>Chance picking finishes on time (worst day)</span><b>${Math.round(minP * 100)}%</b></div>`) +
+    `<div class="kpi"><span>People rostered</span><b>${res.stats.filter(s => s.hours > 0).length} of ${res.stats.length}</b></div>`;
+  let al = ""; const gaps = res.days.filter(d => d && d.short > 0.05).map(d => `${d.d} (${d.short.toFixed(1)} h)`);
+  if (gaps.length) al += `<div class="notice bad"><b>Not enough capacity:</b> ${gaps.join(", ")}. Check availability, raise maximum hours or days, or lengthen the shifts.</div>`;
+  const lowFloor = res.days.filter(d => d && d.minHead < c.minStaff).map(d => d.d); if (lowFloor.length) al += `<div class="notice warn">Fewer than ${c.minStaff} people are on the floor at some point on: ${lowFloor.join(", ")}.</div>`;
+  if (under.length) al += `<div class="notice warn">${under.map(s => esc(s.name)).join(", ")} ${under.length > 1 ? "are" : "is"} below the contract minimum. The work did not need those hours, so you may use them for other tasks.</div>`;
+  $("alerts").innerHTML = al;
+  $("roster").innerHTML = "<tr><th>Name</th><th>Type</th>" + DAYS.map(d => `<th>${d}</th>`).join("") + "<th>Hours</th></tr>" + res.roster.map((r, s) => `<tr><td>${esc(c.staff[s].name)}</td><td>${c.staff[s].type}</td>` +
+    r.map((sh, di) => `<td>${sh ? `<span class="shift ${c.staff[s].type}">${shiftText(res, c, di, sh)}</span>` : '<span class="off">off</span>'}</td>`).join("") +
+    `<td><span class="${res.stats[s].hours + 1e-9 < c.staff[s].minHours ? "low" : ""}">${res.stats[s].hours}</span> / ${c.staff[s].minHours}–${c.staff[s].maxHours}</td></tr>`).join("") +
+    "<tr><th>On shift</th><th></th>" + res.days.map((d, di) => `<th>${d ? res.roster.filter(r => r[di]).length : 0} people</th>`).join("") + `<th>${res.paid}</th></tr>`;
+  $("charts").innerHTML = res.days.map(d => d ? chart(d, c) : "").join("");
+  $("risk").innerHTML = "<tr><th>Day</th><th>Planned for</th><th>Scheduled capacity</th><th>Typical day needs</th><th>Busy day needs (95th percentile)</th><th>Chance it finishes on time</th></tr>" +
+    res.days.filter(d => d && d.pickH > 0).map(d => { const r = risk[d.d]; return `<tr><td>${d.d}</td><td>${d.pickH.toFixed(1)} h picking${d.inbH ? " + " + d.inbH + " h inbound" : ""}</td><td>${d.capacity.toFixed(1)} h</td><td>${r.median.toFixed(1)} h</td><td>${r.p95.toFixed(1)} h</td><td><b>${Math.round(r.p * 100)}%</b></td></tr>`; }).join("");
+  $("results").hidden = false; $("results").scrollIntoView({ behavior: "smooth" });
+}
+function chart(d, c) { const need = (d.pickH + d.inbH) / (d.n * c.slotMin / 60), top = Math.max(...d.head, need, c.minStaff) + 1, W = 300, H = 120, L = 22, bw = (W - L - 4) / d.n, y = v => H - 18 - v / top * (H - 28);
+  const bars = d.head.map((h, t) => `<rect x="${L + t * bw + 1}" y="${y(h)}" width="${bw - 2}" height="${H - 18 - y(h)}" fill="#1F6FEB" opacity=".75"/>`).join("");
+  return `<div><h3>${d.d}: ${P.clock(d.start)} to ${P.clock(d.start + d.n * c.slotMin)}</h3><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="People on shift on ${d.d}">${bars}
+    <line x1="${L}" x2="${W}" y1="${y(need)}" y2="${y(need)}" stroke="#D1242F" stroke-width="1.6" stroke-dasharray="5 3"/><line x1="${L}" x2="${W}" y1="${y(c.minStaff)}" y2="${y(c.minStaff)}" stroke="#6E7781" stroke-dasharray="1 3"/>
+    <text x="0" y="${y(0) + 3}" font-size="9" fill="#5E6A80">0</text><text x="0" y="${y(top - 1) + 3}" font-size="9" fill="#5E6A80">${Math.round(top - 1)}</text>
+    <text x="${L}" y="${H - 4}" font-size="9" fill="#5E6A80">${P.clock(d.start)}</text><text x="${W - 4}" y="${H - 4}" font-size="9" fill="#5E6A80" text-anchor="end">${P.clock(d.start + d.n * c.slotMin)}</text></svg></div>`; }
+
+$("csv").onclick = () => { const { res, cfg: c } = last, q = v => '"' + String(v).replace(/"/g, '""') + '"', rows = [["Name", "Type", ...DAYS, "Hours"]];
+  res.roster.forEach((r, s) => rows.push([c.staff[s].name, c.staff[s].type, ...r.map((sh, di) => sh ? shiftText(res, c, di, sh) : ""), res.stats[s].hours]));
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([rows.map(r => r.map(q).join(",")).join("\n")], { type: "text/csv" })); a.download = "shift-plan.csv"; a.click(); };
+$("print").onclick = () => window.print();
+renderStatic(); renderStaff(); preview();
+</script>
+</body>
+</html>
